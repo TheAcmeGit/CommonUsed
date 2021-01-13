@@ -10,7 +10,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-
+using Microsoft.EntityFrameworkCore;
+using CommonConfig.MyDBContexts;
+using System.Reflection;
+using DotNetCore.CAP;
+using CapWebApp.Api.Applications;
 
 namespace CapWebApp.Api
 {
@@ -27,10 +31,45 @@ namespace CapWebApp.Api
         public void ConfigureServices(IServiceCollection services)
         {
 
+            services.AddTransient<ICapSubscribe, MyCapService>();
+            services.AddDbContext<PlanBContext>(options =>
+            {
+                options.LogTo(Console.WriteLine).EnableSensitiveDataLogging();
+
+                //options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
+                options.UseSqlServer(Configuration.GetConnectionString("DefaultConnection"), sqlOptions =>
+                {
+                    sqlOptions.MigrationsAssembly(Assembly.GetExecutingAssembly().GetName().Name);
+                    sqlOptions.EnableRetryOnFailure(10, TimeSpan.FromSeconds(5), new[] { 2 });
+                });
+            });
             services.AddControllers();
             services.AddSwaggerGen(c =>
             {
                 c.SwaggerDoc("v1", new OpenApiInfo { Title = "CapWebApp.Api", Version = "v1" });
+            });
+
+            services.AddCap(options => {
+                options.UseRabbitMQ(mqOptions => {
+                    mqOptions.HostName = "127.0.0.1";
+                    mqOptions.UserName = "admin";
+                    mqOptions.Password = "admin";
+                    mqOptions.VirtualHost = "/";
+                });
+                options.UseSqlServer(sqlOptions =>
+                {
+                    sqlOptions.ConnectionString = Configuration.GetConnectionString("DefaultConnection");
+                    sqlOptions.Schema = "dbo";
+                    sqlOptions.UseSqlServer2008();
+                });
+
+                options.UseDashboard(DashboardOptions =>
+                {
+                
+                });
+
+                options.DefaultGroup = "CapTestGroup";
+             
             });
         }
 
